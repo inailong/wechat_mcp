@@ -16,10 +16,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nowa277/wechat_mcp/pkg/actuator"
 	"github.com/nowa277/wechat_mcp/pkg/files"
 	"github.com/nowa277/wechat_mcp/pkg/sanitize"
 	"github.com/nowa277/wechat_mcp/pkg/wcdb"
 	"github.com/nowa277/wechat_mcp/pkg/wechat"
+)
+
+var (
+	// ErrEmptyRecipient indicates that the recipient is empty or contains only whitespace.
+	ErrEmptyRecipient = actuator.ErrEmptyRecipient
+	// ErrEmptyContent indicates that the message content is empty or contains only whitespace.
+	ErrEmptyContent = actuator.ErrEmptyContent
 )
 
 type Client struct {
@@ -29,12 +37,14 @@ type Client struct {
 	token      string
 	httpClient *http.Client
 	sanitize   bool
+	actuator   *actuator.X11Actuator
 }
 
 type ClientOptions struct {
 	BaseURL  string
 	Token    string
 	Sanitize bool
+	DryRun   bool
 }
 
 type Session struct {
@@ -81,9 +91,13 @@ type Contact struct {
 
 // NewClient creates a new bridge client, preferring direct native WCDB database access.
 func NewClient(opts ClientOptions) (*Client, error) {
+	act := actuator.NewX11Actuator()
+	act.DryRun = opts.DryRun
+
 	c := &Client{
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		sanitize:   opts.Sanitize,
+		actuator:   act,
 	}
 
 	info, err := wechat.DetectAccount()
@@ -884,3 +898,29 @@ func (c *Client) SyncToGdrive(ctx context.Context, targetDir, filePath string, o
 	}
 	return files.SyncToGdrive(c.accountDir, targetDir, filePath, overwrite)
 }
+
+// SetActuator configures a custom actuator for the client (useful for testing or alternative automation).
+func (c *Client) SetActuator(a *actuator.X11Actuator) {
+	c.actuator = a
+}
+
+// Actuator returns the client's current message actuator.
+func (c *Client) Actuator() *actuator.X11Actuator {
+	return c.actuator
+}
+
+// SendMessage sends a message to the specified recipient via desktop client automation.
+// It performs basic validation on recipient and content before forwarding to the actuator.
+func (c *Client) SendMessage(ctx context.Context, recipient, content string) error {
+	if strings.TrimSpace(recipient) == "" {
+		return ErrEmptyRecipient
+	}
+	if strings.TrimSpace(content) == "" {
+		return ErrEmptyContent
+	}
+	if c.actuator == nil {
+		c.actuator = actuator.NewX11Actuator()
+	}
+	return c.actuator.SendMessage(ctx, recipient, content)
+}
+
