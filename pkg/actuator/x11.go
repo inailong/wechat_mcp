@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,6 +22,8 @@ var (
 	ErrEmptyContent = errors.New("content cannot be empty")
 	// ErrWeChatNotFound indicates that no visible WeChat window was found.
 	ErrWeChatNotFound = errors.New("wechat window not found")
+	// ErrRecipientMismatch indicates that active chat header does not match target recipient.
+	ErrRecipientMismatch = errors.New("active chat title does not match target recipient")
 )
 
 var geomRegex = regexp.MustCompile(`Geometry:\s*(\d+)x(\d+)`)
@@ -200,20 +204,28 @@ func (a *X11Actuator) SendMessage(ctx context.Context, recipient, content string
 		return fmt.Errorf("failed to paste recipient: %w", err)
 	}
 
-	// 7. Wait search delay (e.g. 250ms) then press Return to enter chat
-	if err := sleepWithContext(ctx, a.searchDelay); err != nil {
-		return err
-	}
+		// 7. Wait search delay (e.g. 250ms) then press Return to enter chat
+		if err := sleepWithContext(ctx, a.searchDelay); err != nil {
+			return err
+		}
 
-	if _, err := runner.Run(ctx, nil, "xdotool", "key", "--clearmodifiers", "Return"); err != nil {
-		return fmt.Errorf("failed to press return for search: %w", err)
-	}
+		if _, err := runner.Run(ctx, nil, "xdotool", "key", "--clearmodifiers", "Return"); err != nil {
+			return fmt.Errorf("failed to press return for search: %w", err)
+		}
 
-	if err := sleepWithContext(ctx, 100*time.Millisecond); err != nil {
-		return err
-	}
+		if err := sleepWithContext(ctx, 100*time.Millisecond); err != nil {
+			return err
+		}
 
-	// 8. Write message content to clipboard and paste (Ctrl+V)
+		// Safety check: verify active chat header matches recipient before typing or sending
+		activeTitle, err := a.GetActiveChatTitle(ctx, runner, wechatWID)
+		if err == nil && strings.TrimSpace(activeTitle) != "" {
+			if !MatchRecipient(activeTitle, recipient) {
+				return fmt.Errorf("%w: active chat header is %q, target recipient is %q", ErrRecipientMismatch, activeTitle, recipient)
+			}
+		}
+
+		// 8. Write message content to clipboard and paste (Ctrl+V)
 	if _, err := runner.Run(ctx, []byte(content), "xclip", "-selection", "clipboard"); err != nil {
 		return fmt.Errorf("failed to copy content to clipboard: %w", err)
 	}
@@ -236,4 +248,36 @@ func (a *X11Actuator) SendMessage(ctx context.Context, recipient, content string
 	}
 
 	return nil
+}
+
+// GetActiveChatTitle uses X11 window screenshot and OCR to read the active conversation header.
+func (a *X11Actuator) GetActiveChatTitle(ctx context.Context, runner CommandRunner, wid string) (string, error) {
+	tmpImg := filepath.Join(os.TempDir(), fmt.Sprintf("wechat_hdr_%d.png", time.Now().UnixNano()))
+	defer os.Remove(tmpImg)
+
+	_, err := runner.Run(ctx, nil, "import", "-window", wid, "-crop", "450x60+340+35", tmpImg)
+	if err != nil {
+		return "", err
+	}
+
+	out, err := runner.Run(ctx, nil, "tesseract", tmpImg, "stdout", "-l", "chi_sim+eng", "--psm", "6")
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+// MatchRecipient compares the detected header text with the target recipient identifier.
+func MatchRecipient(headerTitle, recipient string) bool {
+	h := strings.ToLower(strings.ReplaceAll(headerTitle, " ", ""))
+	r := strings.ToLower(strings.ReplaceAll(recipient, " ", ""))
+	if h == "" || r == "" {
+		return false
+	}
+	if (r == "filehelper" && strings.Contains(h, "文件传输助手")) ||
+		(strings.Contains(r, "文件传输助手") && strings.Contains(h, "filehelper")) {
+		return true
+	}
+	return strings.Contains(h, r) || strings.Contains(r, h)
 }

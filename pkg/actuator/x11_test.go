@@ -361,7 +361,72 @@ func TestMutexConcurrency(t *testing.T) {
 
 	// Since X11Actuator uses sync.Mutex around SendMessage,
 	// maxInFlight in runner must never exceed 1!
-	if mock.maxInFlight > 1 {
-		t.Errorf("mutex failed to serialize calls: maxInFlight was %d, expected 1", mock.maxInFlight)
+		if mock.maxInFlight > 1 {
+			t.Errorf("mutex failed to serialize calls: maxInFlight was %d, expected 1", mock.maxInFlight)
+		}
+}
+
+func TestMatchRecipient(t *testing.T) {
+	tests := []struct {
+		header    string
+		recipient string
+		want      bool
+	}{
+		{"莫宏涛 14770697743", "莫宏涛", true},
+		{"莫宏涛 14770697743", "14770697743", true},
+		{"文件传输助手", "filehelper", true},
+		{"filehelper", "文件传输助手", true},
+		{"莫宏涛 14770697743", "文件传输助手", false},
+		{"", "文件传输助手", false},
+		{"文件传输助手", "", false},
+	}
+
+	for _, tc := range tests {
+		got := MatchRecipient(tc.header, tc.recipient)
+		if got != tc.want {
+			t.Errorf("MatchRecipient(%q, %q) = %v, want %v", tc.header, tc.recipient, got, tc.want)
+		}
+	}
+}
+
+func TestSafetyAbortOnMismatch(t *testing.T) {
+	mock := newMockCommandRunner()
+	mock.handlers["xdotool getactivewindow"] = func(stdin []byte, args ...string) ([]byte, error) {
+		return []byte("1001\n"), nil
+	}
+	mock.handlers["xclip -selection clipboard -o"] = func(stdin []byte, args ...string) ([]byte, error) {
+		return []byte("orig-clip"), nil
+	}
+	mock.handlers["xdotool search --onlyvisible --class wechat"] = func(stdin []byte, args ...string) ([]byte, error) {
+		return []byte("2002\n"), nil
+	}
+	mock.handlers["import"] = func(stdin []byte, args ...string) ([]byte, error) {
+		return []byte(""), nil
+	}
+	// OCR reports current active chat is "莫宏涛 14770697743"
+	mock.handlers["tesseract"] = func(stdin []byte, args ...string) ([]byte, error) {
+		return []byte("莫宏涛 14770697743\n"), nil
+	}
+
+	act := NewX11Actuator()
+	act.runner = mock
+	act.searchDelay = 1 * time.Millisecond
+	act.sendDelay = 1 * time.Millisecond
+
+	// Attempt to send to "文件传输助手", but active chat is "莫宏涛"
+	err := act.SendMessage(context.Background(), "文件传输助手", "绝不能误发的机密内容")
+	if err == nil {
+		t.Fatalf("expected error on recipient mismatch, got nil")
+	}
+	if !errors.Is(err, ErrRecipientMismatch) {
+		t.Errorf("expected ErrRecipientMismatch, got %v", err)
+	}
+
+	// Verify that the sensitive content was NEVER written to clipboard!
+	cmds := mock.getCommands()
+	for _, cmd := range cmds {
+		if cmd.Name == "xclip" && string(cmd.Stdin) == "绝不能误发的机密内容" {
+			t.Fatalf("CRITICAL SAFETY FAILURE: message content was written to clipboard despite mismatch!")
+		}
 	}
 }
