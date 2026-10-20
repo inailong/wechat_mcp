@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>微信智能对答中枢 · 控制面板</title>
+  <style>
+    :root {
+      --bg: #0f141c;
+      --card-bg: #18202c;
+      --card-hover: #1f2a3a;
+      --border: #26354a;
+      --primary: #10b981;
+      --primary-hover: #059669;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+      --drawer-bg: #141b24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .brand-icon {
+      font-size: 1.5rem;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--primary);
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .brand-title h1 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .brand-title p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .stats-badge {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent);
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+    }
+    .main-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem;
+      overflow-y: auto;
+    }
+    .toolbar {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .search-box {
+      flex: 1;
+      min-width: 240px;
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      outline: none;
+      font-size: 0.9rem;
+    }
+    .search-box input:focus {
+      border-color: var(--primary);
+    }
+    .filter-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .filter-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .contacts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+    .contact-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .contact-card:hover {
+      border-color: rgba(16, 185, 129, 0.4);
+      transform: translateY(-2px);
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+    .contact-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: #2b394f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .name-block {
+      overflow: hidden;
+    }
+    .name-block .name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .name-block .sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #2b384d;
+      transition: .25s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .25s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--primary); }
+    input:checked + .slider:before { transform: translateX(20px); }
+    .card-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      padding-top: 0.75rem;
+    }
+    .btn-small {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.35rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn-small:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .drawer {
+      width: 420px;
+      background: var(--drawer-bg);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease;
+      position: relative;
+    }
+    .drawer.collapsed {
+      transform: translateX(100%);
+      width: 0;
+      border-left: none;
+    }
+    .drawer-header {
+      padding: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .drawer-body {
+      padding: 1.25rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow-y: auto;
+    }
+    .drawer-body textarea {
+      flex: 1;
+      background: #0d1218;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      resize: none;
+      line-height: 1.6;
+    }
+    .drawer-body textarea:focus { border-color: var(--primary); outline: none; }
+    .drawer-footer {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .log-panel {
+      height: 180px;
+      background: #0a0d14;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .log-header {
+      padding: 0.5rem 1rem;
+      background: #111722;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .log-list {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #a5b4fc;
+    }
+    .log-item { margin-bottom: 0.25rem; }
+    .log-time { color: var(--text-muted); margin-right: 0.5rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🌿</div>
+      <div class="brand-title">
+        <h1>微信智能自动代答中枢</h1>
+        <p>基于 Nailong Gemini-3.8-Flash-High · 因人立卷 · 儒雅话白</p>
+      </div>
+    </div>
+    <div class="stats-badge" id="statsBadge">托管就绪中...</div>
+  </header>
+
+  <div class="main-layout">
+    <div class="content-area">
+      <div class="toolbar">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="搜索联系人、昵称、微信ID...">
+        </div>
+        <button class="filter-btn active" data-filter="all">全部</button>
+        <button class="filter-btn" data-filter="enabled">已点亮代答</button>
+        <button class="filter-btn" data-filter="group">群聊</button>
+      </div>
+      <div class="contacts-grid" id="contactsGrid">
+        <!-- Contact cards render here -->
+      </div>
+    </div>
+
+    <div class="drawer collapsed" id="promptDrawer">
+      <div class="drawer-header">
+        <div>
+          <h3 id="drawerName" style="font-size:1rem; font-weight:600;">专属人设卷宗</h3>
+          <p id="drawerId" style="font-size:0.75rem; color:var(--text-muted);"></p>
+        </div>
+        <button class="btn-small" onclick="closeDrawer()">✕</button>
+      </div>
+      <div class="drawer-body">
+        <p style="font-size:0.8rem; color:var(--text-muted);">
+          为此好友对症用药定制专属提示词。未填写或留空时，将自动采用通用儒雅底稿。
+        </p>
+        <textarea id="promptContent" placeholder="载入人设中..."></textarea>
+      </div>
+      <div class="drawer-footer">
+        <button class="btn-secondary" onclick="resetToDefault()">还原通用底稿</button>
+        <button class="btn-primary" onclick="saveCurrentPrompt()">保存卷宗</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-panel">
+    <div class="log-header">📜 实时代答誊录底稿 (Audit Stream)</div>
+    <div class="log-list" id="logList">
+      <div class="log-item"><span class="log-time">[系统已就绪]</span> 守护服务与光学安检门禁正在后台巡视监听中...</div>
+    </div>
+  </div>
+
+  <script>
+    let allContacts = [];
+    let currentFilter = 'all';
+    let currentEditUser = null;
+
+    async function loadContacts() {
+      try {
+        const res = await fetch('/api/contacts');
+        const data = await res.json();
+        allContacts = data.contacts || [];
+        updateStats();
+        renderContacts();
+      } catch (err) {
+        console.error('加载联系人失败', err);
+      }
+    }
+
+    function updateStats() {
+      const enabledCount = allContacts.filter(c => c.enabled).length;
+      document.getElementById('statsBadge').textContent = `共 ${allContacts.length} 位好友 · 已开启托管 ${enabledCount} 人`;
+    }
+
+    function renderContacts() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const grid = document.getElementById('contactsGrid');
+      grid.innerHTML = '';
+
+      const filtered = allContacts.filter(c => {
+        const matchQuery = (c.displayName || '').toLowerCase().includes(query) ||
+                           (c.username || '').toLowerCase().includes(query) ||
+                           (c.remark || '').toLowerCase().includes(query);
+        if (!matchQuery) return false;
+        if (currentFilter === 'enabled') return c.enabled;
+        if (currentFilter === 'group') return (c.type === 'group' || c.username.includes('@chatroom'));
+        return true;
+      });
+
+      filtered.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'contact-card';
+        const initial = (c.displayName || c.username || '?').substring(0, 1).toUpperCase();
+        card.innerHTML = `
+          <div class="card-top">
+            <div class="contact-info">
+              <div class="avatar">${initial}</div>
+              <div class="name-block">
+                <div class="name" title="${c.displayName || c.username}">${c.displayName || c.username}</div>
+                <div class="sub">${c.username}</div>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="toggleContact('${c.username}', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="card-actions">
+            <button class="btn-small" onclick="openPromptDrawer('${c.username}', '${c.displayName || c.username}')">✍️ 审阅/修撰人设</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    async function toggleContact(username, enabled) {
+      try {
+        await fetch('/api/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, enabled })
+        });
+        const c = allContacts.find(x => x.username === username);
+        if (c) c.enabled = enabled;
+        updateStats();
+        addLog(`已${enabled ? '点亮开启' : '关闭'}[${username}]之自动回复`);
+      } catch (err) {
+        alert('切换状态失败: ' + err.message);
+      }
+    }
+
+    async function openPromptDrawer(username, displayName) {
+      currentEditUser = username;
+      document.getElementById('drawerName').textContent = displayName;
+      document.getElementById('drawerId').textContent = username;
+      document.getElementById('promptDrawer').classList.remove('collapsed');
+
+      try {
+        const res = await fetch('/api/prompt?username=' + encodeURIComponent(username));
+        const data = await res.json();
+        document.getElementById('promptContent').value = data.prompt || '';
+      } catch (err) {
+        document.getElementById('promptContent').value = '加载失败: ' + err.message;
+      }
+    }
+
+    function closeDrawer() {
+      document.getElementById('promptDrawer').classList.add('collapsed');
+      currentEditUser = null;
+    }
+
+    async function saveCurrentPrompt() {
+      if (!currentEditUser) return;
+      const content = document.getElementById('promptContent').value;
+      try {
+        await fetch('/api/prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: currentEditUser, prompt: content })
+        });
+        addLog(`已保存[${currentEditUser}]之专属人设卷宗`);
+        closeDrawer();
+      } catch (err) {
+        alert('保存人设失败: ' + err.message);
+      }
+    }
+
+    async function resetToDefault() {
+      try {
+        const res = await fetch('/api/prompt?username=__default__');
+        const data = await res.json();
+        document.getElementById('promptContent').value = data.prompt || '';
+      } catch (err) {
+        alert('读取默认底稿失败: ' + err.message);
+      }
+    }
+
+    function addLog(text) {
+      const list = document.getElementById('logList');
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      const now = new Date().toLocaleTimeString();
+      item.innerHTML = `<span class="log-time">[${now}]</span> ${text}`;
+      list.prepend(item);
+    }
+
+    async function pollLogs() {
+      try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+        if (data.logs && data.logs.length > 0) {
+          const list = document.getElementById('logList');
+          list.innerHTML = '';
+          data.logs.forEach(l => {
+            const item = document.createElement('div');
+            item.className = 'log-item';
+            item.innerHTML = `<span class="log-time">[${l.time}]</span> <strong>${l.sender}</strong>: "${l.incoming}" ➔ <strong>回复:</strong> "${l.reply}" <span style="color:var(--text-muted)">(${l.latency})</span>`;
+            list.appendChild(item);
+          });
+        }
+      } catch (err) {}
+    }
+
+    document.getElementById('searchInput').addEventListener('input', renderContacts);
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        renderContacts();
+      });
+    });
+
+    loadContacts();
+    setInterval(pollLogs, 3000);
+  </script>
+</body>
+</html>
