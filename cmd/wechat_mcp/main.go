@@ -5,11 +5,19 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
+	"github.com/nowa277/wechat_mcp/pkg/brain"
 	"github.com/nowa277/wechat_mcp/pkg/bridge"
+	"github.com/nowa277/wechat_mcp/pkg/daemon"
+	"github.com/nowa277/wechat_mcp/pkg/daemon/config"
+	"github.com/nowa277/wechat_mcp/pkg/dashboard"
 	"github.com/nowa277/wechat_mcp/pkg/mcp"
+	"github.com/nowa277/wechat_mcp/pkg/prompt"
 	"github.com/nowa277/wechat_mcp/pkg/wechat"
 )
 
@@ -21,6 +29,13 @@ func main() {
 		portFlag     = flag.Int("port", 0, "Custom HTTP fallback port")
 		tokenFlag    = flag.String("token", "", "Custom HTTP fallback token")
 		execFlag     = flag.String("executable", "", "Custom executable path for client configuration")
+
+		// Daemon & Dashboard flags
+		daemonFlag   = flag.Bool("daemon", false, "Run auto-reply daemon and web dashboard")
+		webPortFlag  = flag.Int("web-port", 18080, "Port for web dashboard (default 18080)")
+		brainURLFlag = flag.String("brain-url", "https://cpa.inailong.com/v1", "Nailong / OpenAI-compatible API base URL")
+		brainKeyFlag = flag.String("brain-key", "sk-cliproxyapi-local-secure-key-9f8e7d6c", "API key for Brain client")
+		brainModFlag = flag.String("brain-model", "gemini-3.8-flash-high", "Model name for Brain client")
 	)
 
 	flag.Parse()
@@ -37,7 +52,13 @@ func main() {
 		return
 	}
 
-	// 3. Default: run MCP stdio server
+	// 3. Daemon command
+	if *daemonFlag {
+		runDaemon(*webPortFlag, *brainURLFlag, *brainKeyFlag, *brainModFlag, *sanitizeFlag)
+		return
+	}
+
+	// 4. Default: run MCP stdio server
 	baseURL := ""
 	if *portFlag > 0 {
 		baseURL = fmt.Sprintf("http://127.0.0.1:%d", *portFlag)
@@ -151,3 +172,74 @@ func runInstall(client, customExec string, sanitize bool) {
 	b, _ := json.MarshalIndent(output, "", "  ")
 	fmt.Println(string(b))
 }
+
+func runDaemon(webPort int, brainURL, brainKey, brainModel string, sanitize bool) {
+	fmt.Println("\n[wechat_mcp daemon] 微信智能自动代答中枢 (WeChat Auto-Reply Daemon)")
+	fmt.Println("-----------------------------------------------------------------")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		fmt.Printf("\n[wechat_mcp daemon] Received shutdown signal (%v), exiting cleanly...\n", sig)
+		cancel()
+	}()
+
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".config", "wechat_mcp")
+	cfgPath := filepath.Join(configDir, "daemon_config.json")
+	promptDir := filepath.Join(configDir, "prompts")
+
+	// 1. Config & Prompts
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading daemon config: %v\n", err)
+		os.Exit(1)
+	}
+	if webPort > 0 {
+		cfg.Port = webPort
+	}
+
+	pStore, err := prompt.NewStore(promptDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing prompt store: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 2. Native Bridge Client
+	bClient, err := bridge.NewClient(bridge.ClientOptions{
+		Sanitize: sanitize,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing native bridge: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 3. Brain Client (Nailong API)
+	brainClient := brain.NewClient(brainURL, brainKey, brainModel)
+
+	// 4. Web Dashboard
+	dashServer := dashboard.NewServer(cfg, pStore, bClient, cfg.Port)
+
+	// 5. Auto-reply Daemon
+	d := daemon.NewDaemon(cfg, pStore, brainClient, bClient, daemon.WithDashboard(dashServer))
+
+	fmt.Printf("• 控制面板地址:  http://127.0.0.1:%d\n", cfg.Port)
+	fmt.Printf("• 专属人设目录:  %s\n", promptDir)
+	fmt.Printf("• 神思模型中枢:  %s (%s)\n", brainModel, brainURL)
+	fmt.Printf("• 本地守护进程:  正在监听增量消息与光学死锁门禁...\n\n")
+
+	go func() {
+		if err := dashServer.Start(ctx); err != nil && err != http.ErrServerClosed {
+			fmt.Fprintf(os.Stderr, "[dashboard] error: %v\n", err)
+		}
+	}()
+
+	if err := d.Start(ctx); err != nil && err != context.Canceled {
+		fmt.Fprintf(os.Stderr, "[daemon] error: %v\n", err)
+	}
+}
+
