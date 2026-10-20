@@ -40,6 +40,29 @@ func (r *defaultCommandRunner) Run(ctx context.Context, stdin []byte, name strin
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
+
+	// In X11, xclip write (without -o) daemonizes to serve the selection and child processes inherit stdout/stderr pipes.
+	// If stdout/stderr are connected to Go pipe buffers, cmd.Run() hangs indefinitely waiting for EOF.
+	// Using os.DevNull prevents Go from waiting on inherited pipes.
+	if name == "xclip" {
+		isOutput := false
+		for _, arg := range args {
+			if arg == "-o" {
+				isOutput = true
+				break
+			}
+		}
+		if !isOutput {
+			devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+			if err == nil {
+				defer devNull.Close()
+				cmd.Stdout = devNull
+				cmd.Stderr = devNull
+				return nil, cmd.Run()
+			}
+		}
+	}
+
 	var out bytes.Buffer
 	var errOut bytes.Buffer
 	cmd.Stdout = &out
@@ -186,23 +209,27 @@ func (a *X11Actuator) SendMessage(ctx context.Context, recipient, content string
 		return err
 	}
 
-	// 5. Trigger search (Ctrl+F)
-	if _, err := runner.Run(ctx, nil, "xdotool", "key", "--clearmodifiers", "ctrl+f"); err != nil {
-		return fmt.Errorf("failed to press ctrl+f: %w", err)
-	}
+		// 5. Focus search input (click search box at x=165, y=57 with fallback to Ctrl+F)
+		if _, err := runner.Run(ctx, nil, "xdotool", "mousemove", "--window", wechatWID, "165", "57", "click", "1"); err != nil {
+			_, _ = runner.Run(ctx, nil, "xdotool", "key", "--clearmodifiers", "ctrl+f")
+		}
 
-	if err := sleepWithContext(ctx, 50*time.Millisecond); err != nil {
-		return err
-	}
+		if err := sleepWithContext(ctx, 100*time.Millisecond); err != nil {
+			return err
+		}
 
-	// 6. Write recipient to clipboard and paste (Ctrl+V)
-	if _, err := runner.Run(ctx, []byte(recipient), "xclip", "-selection", "clipboard"); err != nil {
-		return fmt.Errorf("failed to copy recipient to clipboard: %w", err)
-	}
+		// Clear search box
+		_, _ = runner.Run(ctx, nil, "xdotool", "key", "--clearmodifiers", "ctrl+a", "BackSpace")
+		_ = sleepWithContext(ctx, 50*time.Millisecond)
 
-	if _, err := runner.Run(ctx, nil, "xdotool", "key", "--clearmodifiers", "ctrl+v"); err != nil {
-		return fmt.Errorf("failed to paste recipient: %w", err)
-	}
+		// 6. Write recipient to clipboard and paste (Ctrl+V)
+		if _, err := runner.Run(ctx, []byte(recipient), "xclip", "-selection", "clipboard"); err != nil {
+			return fmt.Errorf("failed to copy recipient to clipboard: %w", err)
+		}
+
+		if _, err := runner.Run(ctx, nil, "xdotool", "key", "--clearmodifiers", "ctrl+v"); err != nil {
+			return fmt.Errorf("failed to paste recipient: %w", err)
+		}
 
 		// 7. Wait search delay (e.g. 250ms) then press Return to enter chat
 		if err := sleepWithContext(ctx, a.searchDelay); err != nil {
@@ -213,7 +240,7 @@ func (a *X11Actuator) SendMessage(ctx context.Context, recipient, content string
 			return fmt.Errorf("failed to press return for search: %w", err)
 		}
 
-		if err := sleepWithContext(ctx, 100*time.Millisecond); err != nil {
+		if err := sleepWithContext(ctx, 150*time.Millisecond); err != nil {
 			return err
 		}
 
@@ -224,6 +251,10 @@ func (a *X11Actuator) SendMessage(ctx context.Context, recipient, content string
 				return fmt.Errorf("%w: active chat header is %q, target recipient is %q", ErrRecipientMismatch, activeTitle, recipient)
 			}
 		}
+
+		// Ensure chat input box is focused (click at x=500, y=650)
+		_, _ = runner.Run(ctx, nil, "xdotool", "mousemove", "--window", wechatWID, "500", "650", "click", "1")
+		_ = sleepWithContext(ctx, 50*time.Millisecond)
 
 		// 8. Write message content to clipboard and paste (Ctrl+V)
 	if _, err := runner.Run(ctx, []byte(content), "xclip", "-selection", "clipboard"); err != nil {
@@ -255,7 +286,7 @@ func (a *X11Actuator) GetActiveChatTitle(ctx context.Context, runner CommandRunn
 	tmpImg := filepath.Join(os.TempDir(), fmt.Sprintf("wechat_hdr_%d.png", time.Now().UnixNano()))
 	defer os.Remove(tmpImg)
 
-	_, err := runner.Run(ctx, nil, "import", "-window", wid, "-crop", "450x60+340+35", tmpImg)
+	_, err := runner.Run(ctx, nil, "import", "-window", wid, "-crop", "450x60+310+35", tmpImg)
 	if err != nil {
 		return "", err
 	}
@@ -279,5 +310,15 @@ func MatchRecipient(headerTitle, recipient string) bool {
 		(strings.Contains(r, "文件传输助手") && strings.Contains(h, "filehelper")) {
 		return true
 	}
-	return strings.Contains(h, r) || strings.Contains(r, h)
+	if strings.Contains(h, r) || strings.Contains(r, h) {
+		return true
+	}
+	// Check word tokens (e.g. "Chang", "Shengjie")
+	tokens := strings.Fields(strings.ToLower(recipient))
+	for _, tok := range tokens {
+		if len(tok) >= 3 && strings.Contains(h, tok) {
+			return true
+		}
+	}
+	return false
 }
