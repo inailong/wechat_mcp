@@ -240,17 +240,22 @@ func (a *X11Actuator) SendMessage(ctx context.Context, recipient, content string
 			return fmt.Errorf("failed to press return for search: %w", err)
 		}
 
-		if err := sleepWithContext(ctx, 150*time.Millisecond); err != nil {
-			return err
-		}
-
-		// Safety check: verify active chat header matches recipient before typing or sending
-		activeTitle, err := a.GetActiveChatTitle(ctx, runner, wechatWID)
-		if err == nil && strings.TrimSpace(activeTitle) != "" {
-			if !MatchRecipient(activeTitle, recipient) {
+			// Safety check: poll active chat header until X11 repaint matches recipient (up to 1s)
+			var activeTitle string
+			deadline := time.Now().Add(1 * time.Second)
+			for time.Now().Before(deadline) {
+				t, err := a.GetActiveChatTitle(ctx, runner, wechatWID)
+				if err == nil && strings.TrimSpace(t) != "" {
+					activeTitle = t
+					if MatchRecipient(t, recipient) {
+						break
+					}
+				}
+				_ = sleepWithContext(ctx, 100*time.Millisecond)
+			}
+			if strings.TrimSpace(activeTitle) != "" && !MatchRecipient(activeTitle, recipient) {
 				return fmt.Errorf("%w: active chat header is %q, target recipient is %q", ErrRecipientMismatch, activeTitle, recipient)
 			}
-		}
 
 		// Ensure chat input box is focused (click at x=500, y=650)
 		_, _ = runner.Run(ctx, nil, "xdotool", "mousemove", "--window", wechatWID, "500", "650", "click", "1")
