@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/nowa277/wechat_mcp/pkg/bridge"
@@ -240,6 +241,24 @@ func (s *Server) getTools() []Tool {
 				},
 			},
 		},
+		{
+			Name:        "send_message",
+			Description: "Send a message to a WeChat contact or chat via desktop client automation",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"recipient": map[string]interface{}{
+						"type":        "string",
+						"description": "Name, nickname, or remark of WeChat contact or group chat",
+					},
+					"content": map[string]interface{}{
+						"type":        "string",
+						"description": "Message text content to send",
+					},
+				},
+				"required": []string{"recipient", "content"},
+			},
+		},
 	}
 }
 
@@ -356,6 +375,24 @@ func (s *Server) handleToolCall(ctx context.Context, name string, args map[strin
 			return formatError(err)
 		}
 		return formatJSON(res)
+
+	case "send_message":
+		recipient := strings.TrimSpace(getString("recipient"))
+		if recipient == "" {
+			return formatError(fmt.Errorf("recipient is required"))
+		}
+		content := strings.TrimSpace(getString("content"))
+		if content == "" {
+			return formatError(fmt.Errorf("content is required"))
+		}
+		if err := s.client.SendMessage(ctx, recipient, content); err != nil {
+			return formatError(err)
+		}
+		return formatJSON(map[string]interface{}{
+			"success":   true,
+			"recipient": recipient,
+			"message":   "sent successfully",
+		})
 
 	default:
 		return formatError(fmt.Errorf("unknown tool: %s", name))
