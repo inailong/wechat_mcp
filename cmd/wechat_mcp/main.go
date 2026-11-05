@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 
 	"github.com/inailong/wechat_mcp/pkg/brain"
@@ -99,20 +100,26 @@ func runDoctor(customPort int, customToken string) {
 		if info.SessionDb != "" {
 			fmt.Printf("  Session DB:        %s\n", info.SessionDb)
 		}
-		if info.DecryptKey != "" {
-			fmt.Printf("  Database Key:      [OK] Loaded (%s...)\n", info.DecryptKey[:8])
+			if info.DecryptKey != "" {
+				fmt.Printf("  Database Key:      [OK] Loaded (%s...)\n", info.DecryptKey[:8])
+			} else {
+				fmt.Printf("  Database Key:      [WARN] Missing (Run 'python scripts/get_key_windows.py' to auto-extract)\n")
+			}
 		}
-	}
 
-	// 2. Initialize Direct Native Engine
-	client, err := bridge.NewClient(bridge.ClientOptions{})
-	if err != nil {
-		fmt.Printf("WCDB Direct Engine:  [FAIL] %v\n", err)
-		fmt.Printf("\nVerdict: UNHEALTHY\n\n")
-		os.Exit(1)
-	}
+		// 2. Initialize Direct Native Engine
+		client, err := bridge.NewClient(bridge.ClientOptions{})
+		if err != nil {
+			fmt.Printf("WCDB Direct Engine:  [FAIL] %v\n", err)
+			fmt.Printf("\nVerdict: UNHEALTHY\n\n")
+			os.Exit(1)
+		}
 
-	fmt.Printf("WCDB Direct Engine:  [OK] Native CGO Driver Active (Zero Electron)\n")
+		if runtime.GOOS == "windows" {
+			fmt.Printf("WCDB Direct Engine:  [OK] Windows Win32 Driver Active (Zero Electron)\n")
+		} else {
+			fmt.Printf("WCDB Direct Engine:  [OK] Native Driver Active (Zero Electron)\n")
+		}
 
 	// 3. Test read sessions
 	ctx := context.Background()

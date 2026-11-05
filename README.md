@@ -61,7 +61,43 @@ GOOS=windows go build -o bin/wechat_mcp.exe ./cmd/wechat_mcp
 
 ---
 
-## 3. 给 Agent 自行配置的提示词 (Agent System Prompts & Instructions)
+## 3. 微信数据库解密密钥获取与自动化配置 (Database Key Extraction)
+
+微信本地 SQLite 数据库（`session.db`、`message_0.db`、`contact.db`）采用 256-bit AES 进行加密。`wechat_mcp` 提供了**一键自动化提取脚本**与完善的兜底方案：
+
+### 方案 A：Windows 一键全自动内存提取脚本（强烈推荐）
+仓库内内置了自动化内存探测与密钥注入脚本 `scripts/get_key_windows.py`（以及 PowerShell 封装 `scripts/get_key_windows.ps1`）：
+1. 确保 Windows 微信处于登录并运行状态。
+2. 运行脚本：
+   ```powershell
+   # 方式 1：Python 一键运行（自动检测并安装必要依赖，自动扫描微信内存）
+   python scripts\get_key_windows.py
+
+   # 方式 2：PowerShell 运行
+   .\scripts\get_key_windows.ps1
+   ```
+3. 脚本会自动提取 64 位十六进制密钥，并**自动创建并写入配置文件** `%APPDATA%\wechat_mcp\config.json`：
+   ```json
+   {
+     "decryptKey": "0bdb5000f4914f49b30fad48b5ad23c252f4df60206641919117d6b9aa40aff7",
+     "wxid": "wxid_xxxx"
+   }
+   ```
+4. 随后运行 `.\bin\wechat_mcp.exe --doctor` 即可见证 `[OK] Loaded` 与全绿诊断！
+
+### 方案 B：WeFlow 零密钥免提取桥接（自动兜底）
+若不想从内存中扫描密钥，且本地安装有 WeFlow：
+- 只需在 WeFlow 设置中开启 HTTP API（默认端口 `5031`）。
+- `wechat_mcp` 具有双模自适应引擎：当原生 WCDB 密钥未配置时，会自动感知并无缝切换至 WeFlow 本地高速 HTTP 桥接，无需任何密钥配置。
+
+### 方案 C：手动配置或环境变量注入
+若您通过其他工具（如 PyWxDump 命令行 `pywxdump bias --auto` 或 Cheat Engine 等）已取得 64 位密钥：
+- 可设置环境变量：`$env:WECHAT_DB_KEY="你的64位密钥"`
+- 或手动保存至配置文件：`%APPDATA%\wechat_mcp\config.json` (Windows) 或 `~/.config/wechat_mcp/config.json` (Linux)。
+
+---
+
+## 4. 给 Agent 自行配置的提示词 (Agent System Prompts & Instructions)
 
 > **请将以下内容直接复制并提供给你的 AI Agent（如 Claude Desktop、Claude Code、Cursor、Windsurf），Agent 将自动了解如何使用本 MCP 服务为你服务：**
 
