@@ -11,14 +11,14 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/nowa277/wechat_mcp/pkg/brain"
-	"github.com/nowa277/wechat_mcp/pkg/bridge"
-	"github.com/nowa277/wechat_mcp/pkg/daemon"
-	"github.com/nowa277/wechat_mcp/pkg/daemon/config"
-	"github.com/nowa277/wechat_mcp/pkg/dashboard"
-	"github.com/nowa277/wechat_mcp/pkg/mcp"
-	"github.com/nowa277/wechat_mcp/pkg/prompt"
-	"github.com/nowa277/wechat_mcp/pkg/wechat"
+	"github.com/inailong/wechat_mcp/pkg/brain"
+	"github.com/inailong/wechat_mcp/pkg/bridge"
+	"github.com/inailong/wechat_mcp/pkg/daemon"
+	"github.com/inailong/wechat_mcp/pkg/daemon/config"
+	"github.com/inailong/wechat_mcp/pkg/dashboard"
+	"github.com/inailong/wechat_mcp/pkg/mcp"
+	"github.com/inailong/wechat_mcp/pkg/prompt"
+	"github.com/inailong/wechat_mcp/pkg/wechat"
 )
 
 func main() {

@@ -21,10 +21,6 @@ A lightweight, standalone Model Context Protocol (MCP) server for Linux that ena
   - 自动读取并缓存数据库解密密钥，无须用户手动填写复杂 Token。
 
 - **谷歌云盘一键同步与云端备份 (Google Drive Cloud Backup)**:
-  - 内置  工具，支持一键将微信接收的文件/附件增量同步到谷歌云盘（挂载于 ）。
-  - 支持指定单个文件或文档直接上传至云盘，自动处理路径与同名去重。
-
-- **谷歌云盘一键同步与云端备份 (Google Drive Cloud Backup)**:
   - 内置 `sync_to_gdrive` 工具，支持一键将微信接收的文件/附件增量同步到谷歌云盘（挂载于 `~/gdrive/wechat`）。
   - 支持指定单个文件或文档直接上传至云盘，自动处理路径与同名去重。
 
@@ -36,10 +32,9 @@ A lightweight, standalone Model Context Protocol (MCP) server for Linux that ena
 
 ## 2. 快速编译与运行 (Build & Run)
 
-### 编译二进制
-
+### Linux 平台
 ```bash
-# 编译单二进制文件
+# 编译原生二进制 (需 CGO)
 go build -o bin/wechat_mcp ./cmd/wechat_mcp
 
 # 运行自检诊断
@@ -47,6 +42,21 @@ go build -o bin/wechat_mcp ./cmd/wechat_mcp
 
 # 生成 Claude Desktop 配置
 ./bin/wechat_mcp --install claude-desktop
+```
+
+### Windows 平台 (PowerShell / CMD)
+```powershell
+# 原生编译 (纯 Go，无需 GCC/MinGW)
+go build -o bin\wechat_mcp.exe .\cmd\wechat_mcp
+
+# 交叉编译 (在 Linux 上为 Windows 生成)
+GOOS=windows go build -o bin/wechat_mcp.exe ./cmd/wechat_mcp
+
+# 运行自检诊断
+.\bin\wechat_mcp.exe --doctor
+
+# 生成 MCP 客户端配置
+.\bin\wechat_mcp.exe --install claude-desktop
 ```
 
 ---

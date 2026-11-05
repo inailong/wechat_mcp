@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/nowa277/wechat_mcp/pkg/bridge"
+	"github.com/inailong/wechat_mcp/pkg/bridge"
 )
 
 type Server struct {

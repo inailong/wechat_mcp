@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nowa277/wechat_mcp/pkg/bridge"
-	"github.com/nowa277/wechat_mcp/pkg/wechat"
+	"github.com/inailong/wechat_mcp/pkg/bridge"
+	"github.com/inailong/wechat_mcp/pkg/wechat"
 )
 
 type InboundMessage struct {
@@ -23,10 +23,11 @@ type MessageSource interface {
 }
 
 type WCDBWatcher struct {
-	bClient  *bridge.Client
-	msgChan  chan InboundMessage
-	selfWxID string
-	lastSeen int64
+	bClient    *bridge.Client
+	msgChan    chan InboundMessage
+	selfWxID   string
+	lastSeen   int64
+	seenMsgIDs map[string]int64
 }
 
 func NewWCDBWatcher(bClient *bridge.Client) *WCDBWatcher {
@@ -36,10 +37,11 @@ func NewWCDBWatcher(bClient *bridge.Client) *WCDBWatcher {
 	}
 
 	return &WCDBWatcher{
-		bClient:  bClient,
-		msgChan:  make(chan InboundMessage, 50),
-		selfWxID: selfWxID,
-		lastSeen: time.Now().Unix(),
+		bClient:    bClient,
+		msgChan:    make(chan InboundMessage, 50),
+		selfWxID:   selfWxID,
+		lastSeen:   time.Now().Unix(),
+		seenMsgIDs: make(map[string]int64),
 	}
 }
 
@@ -67,25 +69,33 @@ func (w *WCDBWatcher) pollNewMessages(ctx context.Context) {
 	}
 
 	now := time.Now().Unix()
+	// Allow 5-second overlap window to absorb clock jitter and database commit latency
+	querySince := w.lastSeen - 5
+	if querySince < 0 {
+		querySince = 0
+	}
+
 	sessions, err := w.bClient.ListSessions(ctx, "", 20, 0)
 	if err != nil || sessions == nil {
 		return
 	}
 
 	for _, sess := range sessions.Sessions {
-		if sess.LastTimestamp < w.lastSeen {
+		if sess.LastTimestamp < querySince {
 			continue
 		}
 
-		msgs, err := w.bClient.ListMessages(ctx, sess.SessionID, 10, 0, "desc", w.lastSeen, now+10)
+		msgs, err := w.bClient.ListMessages(ctx, sess.SessionID, 10, 0, "desc", querySince, now+10)
 		if err != nil || msgs == nil {
 			continue
 		}
 
 		for _, m := range msgs.Messages {
-			if m.Timestamp <= w.lastSeen {
+			if w.seenMsgIDs[m.ID] > 0 {
 				continue
 			}
+			w.seenMsgIDs[m.ID] = m.Timestamp
+
 			// Skip self messages
 			if w.selfWxID != "" && (m.Sender == w.selfWxID || strings.HasPrefix(m.Sender, w.selfWxID)) {
 				continue
@@ -114,6 +124,16 @@ func (w *WCDBWatcher) pollNewMessages(ctx context.Context) {
 			select {
 			case w.msgChan <- inbound:
 			default:
+			}
+		}
+	}
+
+	// Prune old seen IDs older than 10 minutes to prevent memory leak
+	if len(w.seenMsgIDs) > 200 {
+		cutoff := now - 600
+		for id, ts := range w.seenMsgIDs {
+			if ts < cutoff {
+				delete(w.seenMsgIDs, id)
 			}
 		}
 	}

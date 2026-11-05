@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nowa277/wechat_mcp/pkg/daemon/config"
-	"github.com/nowa277/wechat_mcp/pkg/prompt"
+	"github.com/inailong/wechat_mcp/pkg/daemon/config"
+	"github.com/inailong/wechat_mcp/pkg/prompt"
 )
 
 func TestDashboardServer_API(t *testing.T) {

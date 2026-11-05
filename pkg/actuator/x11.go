@@ -1,9 +1,10 @@
+//go:build linux
+
 package actuator
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,17 +14,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
-
-var (
-	// ErrEmptyRecipient indicates that the recipient is empty or contains only whitespace.
-	ErrEmptyRecipient = errors.New("recipient cannot be empty")
-	// ErrEmptyContent indicates that the message content is empty or contains only whitespace.
-	ErrEmptyContent = errors.New("content cannot be empty")
-	// ErrWeChatNotFound indicates that no visible WeChat window was found.
-	ErrWeChatNotFound = errors.New("wechat window not found")
-	// ErrRecipientMismatch indicates that active chat header does not match target recipient.
-	ErrRecipientMismatch = errors.New("active chat title does not match target recipient")
 )
 
 var geomRegex = regexp.MustCompile(`Geometry:\s*(\d+)x(\d+)`)
@@ -90,6 +80,14 @@ func NewX11Actuator() *X11Actuator {
 		searchDelay: 250 * time.Millisecond,
 		sendDelay:   100 * time.Millisecond,
 	}
+}
+
+func (a *X11Actuator) SetDryRun(dryRun bool) {
+	a.DryRun = dryRun
+}
+
+func (a *X11Actuator) IsDryRun() bool {
+	return a.DryRun
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) error {

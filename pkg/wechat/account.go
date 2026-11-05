@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -41,6 +42,12 @@ func DetectAccount() (*AccountInfo, error) {
 		filepath.Join(home, "xwechat_files"),
 		filepath.Join(home, "Documents", "xwechat_files"),
 		filepath.Join(home, ".xwechat", "xwechat_files"),
+	}
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		dataDirs = append(dataDirs,
+			filepath.Join(appData, "Tencent", "xwechat_files"),
+			filepath.Join(home, "Documents", "WeChat Files"),
+		)
 	}
 
 	var foundDataDir string
@@ -107,7 +114,13 @@ func DetectAccount() (*AccountInfo, error) {
 		info.DecryptKey = envKey
 	}
 	if info.DecryptKey == "" {
-		mcpCfgPath := filepath.Join(home, ".config", "wechat_mcp", "config.json")
+		mcpCfgDir := filepath.Join(home, ".config", "wechat_mcp")
+		if runtime.GOOS == "windows" {
+			if appData := os.Getenv("APPDATA"); appData != "" {
+				mcpCfgDir = filepath.Join(appData, "wechat_mcp")
+			}
+		}
+		mcpCfgPath := filepath.Join(mcpCfgDir, "config.json")
 		if mcpData, err := os.ReadFile(mcpCfgPath); err == nil {
 			var mcpCfg map[string]interface{}
 			if err := json.Unmarshal(mcpData, &mcpCfg); err == nil {
@@ -120,6 +133,11 @@ func DetectAccount() (*AccountInfo, error) {
 
 	// Read or auto-configure WeFlow config
 	weflowDir := filepath.Join(home, ".config", "weflow")
+	if runtime.GOOS == "windows" {
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			weflowDir = filepath.Join(appData, "weflow")
+		}
+	}
 	weflowCfgPath := filepath.Join(weflowDir, "WeFlow-config.json")
 	if cfgData, err := os.ReadFile(weflowCfgPath); err == nil {
 		var cfg map[string]interface{}
@@ -223,6 +241,10 @@ func readVarint(buf []byte) (int, int) {
 
 // EnsureFakeClock creates or verifies /tmp/libfake_clock.so for WeFlow time-interception.
 func EnsureFakeClock() (string, error) {
+	if runtime.GOOS != "linux" {
+		return "", nil // Fake clock LD_PRELOAD is only used for Linux WeFlow time-interception
+	}
+
 	libPath := "/tmp/libfake_clock.so"
 	if fi, err := os.Stat(libPath); err == nil && fi.Size() > 0 {
 		return libPath, nil

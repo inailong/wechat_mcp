@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/nowa277/wechat_mcp/pkg/actuator"
+	"github.com/inailong/wechat_mcp/pkg/actuator"
 )
 
 func TestBridgeLive(t *testing.T) {
@@ -81,12 +81,12 @@ func TestClientSendMessage_DryRun(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	if client.Actuator() == nil {
-		t.Fatal("expected actuator to be initialized")
-	}
-	if !client.Actuator().DryRun {
-		t.Fatal("expected actuator.DryRun to be true when ClientOptions.DryRun is true")
-	}
+		if client.Actuator() == nil {
+			t.Fatal("expected actuator to be initialized")
+		}
+		if !client.Actuator().IsDryRun() {
+			t.Fatal("expected actuator.IsDryRun() to be true when ClientOptions.DryRun is true")
+		}
 
 	ctx := context.Background()
 	err = client.SendMessage(ctx, "filehelper", "hello test")

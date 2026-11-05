@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nowa277/wechat_mcp/pkg/brain"
-	"github.com/nowa277/wechat_mcp/pkg/bridge"
-	"github.com/nowa277/wechat_mcp/pkg/daemon/config"
-	"github.com/nowa277/wechat_mcp/pkg/prompt"
+	"github.com/inailong/wechat_mcp/pkg/brain"
+	"github.com/inailong/wechat_mcp/pkg/bridge"
+	"github.com/inailong/wechat_mcp/pkg/daemon/config"
+	"github.com/inailong/wechat_mcp/pkg/prompt"
 )
 
 type DashboardLogger interface {
@@ -126,6 +126,8 @@ func (d *Daemon) handleInbound(ctx context.Context, msg InboundMessage) {
 		return // Ignore disabled contacts
 	}
 
+	fmt.Printf("[daemon] Inbound message from enabled contact %s (%s): %q\n", msg.Sender, targetID, msg.Content)
+
 	// 2. Debouncer
 	d.debouncersMu.Lock()
 	deb, ok := d.debouncers[targetID]
@@ -202,11 +204,28 @@ func (d *Daemon) processDebouncedMessages(ctx context.Context, targetID string, 
 		reply, err = d.brain.GenerateReply(ctx, systemPrompt, history)
 	}
 
-	var sendErr error
-	if err == nil && reply != "" && d.bClient != nil {
-		// 5. Send message via Bridge / X11 Actuator
-		sendErr = d.bClient.SendMessage(ctx, targetID, reply)
-	}
+		var sendErr error
+		if err == nil && reply != "" && d.bClient != nil {
+			// 5. Send message via Bridge / X11 Actuator
+			recipient := targetID
+			if contact, cErr := d.bClient.GetContact(ctx, targetID); cErr == nil && contact != nil {
+				if contact.DisplayName != "" {
+					recipient = contact.DisplayName
+				} else if contact.Remark != "" {
+					recipient = contact.Remark
+				} else if contact.Nickname != "" {
+					recipient = contact.Nickname
+				}
+			}
+
+			fmt.Printf("[daemon] Delivering auto-reply to %s (%s): %q\n", targetID, recipient, reply)
+			sendErr = d.bClient.SendMessage(ctx, recipient, reply)
+			if sendErr != nil {
+				fmt.Printf("[daemon] SendMessage error to %s: %v\n", recipient, sendErr)
+			} else {
+				fmt.Printf("[daemon] Auto-reply delivered to %s in %v\n", recipient, time.Since(start))
+			}
+		}
 
 	latency := time.Since(start)
 

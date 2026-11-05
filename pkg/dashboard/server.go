@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nowa277/wechat_mcp/pkg/bridge"
-	"github.com/nowa277/wechat_mcp/pkg/daemon/config"
-	"github.com/nowa277/wechat_mcp/pkg/prompt"
+	"github.com/inailong/wechat_mcp/pkg/bridge"
+	"github.com/inailong/wechat_mcp/pkg/daemon/config"
+	"github.com/inailong/wechat_mcp/pkg/prompt"
 )
 
 //go:embed ui/*

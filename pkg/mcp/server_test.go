@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nowa277/wechat_mcp/pkg/actuator"
-	"github.com/nowa277/wechat_mcp/pkg/bridge"
+	"github.com/inailong/wechat_mcp/pkg/actuator"
+	"github.com/inailong/wechat_mcp/pkg/bridge"
 )
 
 func newTestServer(dryRun bool) *Server {

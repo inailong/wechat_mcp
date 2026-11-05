@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nowa277/wechat_mcp/pkg/actuator"
-	"github.com/nowa277/wechat_mcp/pkg/files"
-	"github.com/nowa277/wechat_mcp/pkg/sanitize"
-	"github.com/nowa277/wechat_mcp/pkg/wcdb"
-	"github.com/nowa277/wechat_mcp/pkg/wechat"
+	"github.com/inailong/wechat_mcp/pkg/actuator"
+	"github.com/inailong/wechat_mcp/pkg/files"
+	"github.com/inailong/wechat_mcp/pkg/sanitize"
+	"github.com/inailong/wechat_mcp/pkg/wcdb"
+	"github.com/inailong/wechat_mcp/pkg/wechat"
 )
 
 var (
@@ -37,7 +37,7 @@ type Client struct {
 	token      string
 	httpClient *http.Client
 	sanitize   bool
-	actuator   *actuator.X11Actuator
+	actuator   actuator.Actuator
 }
 
 type ClientOptions struct {
@@ -91,8 +91,10 @@ type Contact struct {
 
 // NewClient creates a new bridge client, preferring direct native WCDB database access.
 func NewClient(opts ClientOptions) (*Client, error) {
-	act := actuator.NewX11Actuator()
-	act.DryRun = opts.DryRun
+	act := actuator.NewActuator()
+	if act != nil {
+		act.SetDryRun(opts.DryRun)
+	}
 
 	c := &Client{
 		httpClient: &http.Client{Timeout: 10 * time.Second},
@@ -900,12 +902,12 @@ func (c *Client) SyncToGdrive(ctx context.Context, targetDir, filePath string, o
 }
 
 // SetActuator configures a custom actuator for the client (useful for testing or alternative automation).
-func (c *Client) SetActuator(a *actuator.X11Actuator) {
+func (c *Client) SetActuator(a actuator.Actuator) {
 	c.actuator = a
 }
 
 // Actuator returns the client's current message actuator.
-func (c *Client) Actuator() *actuator.X11Actuator {
+func (c *Client) Actuator() actuator.Actuator {
 	return c.actuator
 }
 
@@ -919,7 +921,7 @@ func (c *Client) SendMessage(ctx context.Context, recipient, content string) err
 		return ErrEmptyContent
 	}
 	if c.actuator == nil {
-		c.actuator = actuator.NewX11Actuator()
+		c.actuator = actuator.NewActuator()
 	}
 	return c.actuator.SendMessage(ctx, recipient, content)
 }

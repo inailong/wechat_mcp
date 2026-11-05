@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nowa277/wechat_mcp/pkg/brain"
-	"github.com/nowa277/wechat_mcp/pkg/bridge"
-	"github.com/nowa277/wechat_mcp/pkg/daemon/config"
-	"github.com/nowa277/wechat_mcp/pkg/prompt"
+	"github.com/inailong/wechat_mcp/pkg/brain"
+	"github.com/inailong/wechat_mcp/pkg/bridge"
+	"github.com/inailong/wechat_mcp/pkg/daemon/config"
+	"github.com/inailong/wechat_mcp/pkg/prompt"
 )
 
 type mockMessageSource struct {
@@ -112,7 +112,7 @@ func TestDaemon_DebounceAndWhitelist(t *testing.T) {
 	}
 
 	// Wait 1.5s (longer than debounce 1s)
-	time.Sleep(1500 * time.Millisecond)
+	time.Sleep(2500 * time.Millisecond)
 
 	if atomic.LoadInt32(&brainCalls) != 0 {
 		t.Fatalf("expected 0 calls for disabled user B, got %d", brainCalls)
@@ -135,7 +135,7 @@ func TestDaemon_DebounceAndWhitelist(t *testing.T) {
 	}
 
 	// Wait debounce window to complete (1s + margin)
-	time.Sleep(1500 * time.Millisecond)
+	time.Sleep(2500 * time.Millisecond)
 
 	// Verify debounce: only 1 brain call made for the 2 rapid messages!
 	if calls := atomic.LoadInt32(&brainCalls); calls != 1 {
